@@ -1,0 +1,91 @@
+
+# views.py
+from django.shortcuts import render
+from django.contrib.auth import authenticate, login
+from django.http import HttpResponse
+import serial
+
+ser = serial.Serial('COM5', 9600, timeout=1)
+
+def login_view(request):
+    if request.method == 'POST':
+        username = request.POST['username']
+        password = request.POST['password']
+        user = authenticate(request, username=username, password=password)
+
+        if user is not None:
+            login(request, user)
+            # Send command to open and close the door lock
+            ser.write(b'0')
+            return HttpResponse(status=200)
+        else:
+            return HttpResponse(status=401)
+
+    return HttpResponse(status=405)
+
+#urls.py
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('login/', views.login_view, name='login'),
+    # Add other URLs here
+]
+
+#reactjs code
+// LoginForm.js
+import React, { useState } from 'react';
+import axios from 'axios';
+
+function LoginForm() {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState(null);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await axios.post('http://localhost:8000/login/', {
+                username: username,
+                password: password
+            });
+            console.log(response);
+        } catch (err) {
+            setError('Invalid username or password');
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit}>
+            <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+            <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <button type="submit">Login</button>
+            {error && <p>{error}</p>}
+        </form>
+    );
+}
+
+export default LoginForm;
+
+
+arduino code
+#include <Servo.h>
+
+Servo servo;
+
+void setup() {
+  servo.attach(9); // Assuming the servo is connected to pin 9
+  Serial.begin(9600);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    char command = Serial.read();
+    if (command == '0') {
+      servo.write(90); // Open the door lock
+      delay(2000); // Wait for 2 seconds
+      servo.write(0); // Close the door lock
+    }
+  }
+}
+
